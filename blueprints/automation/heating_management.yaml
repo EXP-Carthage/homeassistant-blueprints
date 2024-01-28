@@ -1,0 +1,61 @@
+blueprint:
+  name: Pilotage radiateur
+  description: >-
+    Pilote un radiateur avec fil pilote en comparant une température de consigne avec la température ambiante relevée dans la pièce,
+    et n'utilisant que 2 modes (Confort et Off).
+  domain: automation
+  author: David Moreau
+  source_url: https://github.com/EXP-Carthage/homeassistant-blueprints/blob/master/blueprints/automation/heating_management.yaml
+
+  input:
+    setpoint:
+      name: Consigne
+      description: Température souhaitée dans la pièce
+      selector:
+        entity:
+          domain: input_number
+    temperature:
+      name: Température
+      description: Température ambiante mesurée dans la pièce
+      selector:
+        entity:
+          device_class: temperature
+          domain: sensor
+    heater:
+      name: Radiateur
+      description: Entité du radiateur à piloter
+      selector:
+        target:
+          entity:
+            domain: select
+
+trigger:
+- platform: state
+  entity_id:
+    - !input setpoint
+    - !input temperature
+
+variables:
+  setpoint: !input setpoint
+  temperature: !input temperature
+
+action:
+- choose:
+  - conditions:
+    - condition: template
+      value_template: "{{ states(temperature)|float < states(setpoint)|float }}"
+    sequence:
+    - service: select.select_option
+      target: !input heater
+      data:
+        option: "comfort"
+  - conditions:
+    - condition: template
+      value_template: "{{ states(temperature)|float >= states(setpoint)|float }}"
+    sequence:
+    - service: select.select_option
+      target: !input heater
+      data:
+        option: "off"
+
+mode: restart
