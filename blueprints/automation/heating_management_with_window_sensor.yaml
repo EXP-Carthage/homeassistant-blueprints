@@ -1,0 +1,83 @@
+blueprint:
+  name: Pilotage radiateur
+  description: >-
+    Pilote un radiateur avec fil pilote en comparant une température de consigne avec la température ambiante relevée dans la pièce,
+    gérant un capteur d'ouverture de fenêtre (ou groupe de capteurs) et n'utilisant que 2 modes (Confort et Off).
+  domain: automation
+  author: David Moreau
+  source_url: https://github.com/EXP-Carthage/homeassistant-blueprints/blob/master/blueprints/automation/heating_management_with_window_sensor.yaml
+
+  input:
+    setpoint:
+      name: Consigne
+      description: Température souhaitée dans la pièce
+      selector:
+        entity:
+          domain: input_number
+    temperature:
+      name: Température
+      description: Température ambiante mesurée dans la pièce
+      selector:
+        entity:
+          device_class: temperature
+          domain: sensor
+    window:
+      name: Fenêtre
+      description: Capteur d'ouverture de fenêtre (ou groupe de capteurs)
+      selector:
+        entity:
+          device_class: window
+          domain: binary_sensor
+    heater:
+      name: Radiateur
+      description: Entité du radiateur à piloter
+      selector:
+        target:
+          entity:
+            domain: select
+
+trigger:
+- platform: state
+  entity_id:
+    - !input setpoint
+    - !input temperature
+    - !input window
+
+variables:
+  setpoint: !input setpoint
+  temperature: !input temperature
+  window: !input window
+
+action:
+- choose:
+  - conditions:
+    - condition: and
+      conditions:
+        - condition: template
+          value_template: "{{ states(temperature)|float < states(setpoint)|float }}"
+        - condition: or
+          conditions:
+            - condition: template
+              value_template: "{{ trigger.entity_id == window and trigger.from_state.state == 'on' and trigger.to_state.state == 'off' }}"
+            - condition: state
+              entity_id: !input window
+              state: "off"
+    sequence:
+    - service: select.select_option
+      target: !input heater
+      data:
+        option: "comfort"
+  - conditions:
+    - condition: or
+      conditions:
+        - condition: template
+          value_template: "{{ states(temperature)|float >= states(setpoint)|float }}"
+        - condition: template
+          value_template: "{{ trigger.entity_id == window and trigger.from_state.state == 'off' and trigger.to_state.state == 'on' }}"
+    sequence:
+    - service: select.select_option
+      target: !input heater
+      data:
+        option: "off"
+
+mode: restart
